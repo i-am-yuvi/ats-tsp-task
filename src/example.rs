@@ -10,11 +10,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("==========================================");
     println!("Authentic Time Service - Example Application");
     println!("==========================================\n");
+
     // Create a time authority service
     println!("1. Creating Time Authority service...");
     let mut authority_service = TspTimeService::new();
-    authority_service.as_authority("time.authority.example.com".to_string());
-    println!("   - Authority ID: time.authority.example.com");
+
+    // Explicitly use the same service for both roles
+    let auth_id = "time.authority.example.com".to_string();
+    authority_service.as_authority(auth_id.clone());
+    println!("   - Authority ID: {}", auth_id);
     println!("   - Authority created successfully");
 
     // Get the authority's public key for sharing
@@ -24,32 +28,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("   - Authority public key: {:?}", &authority_pubkey[0..4]);
     println!();
 
-    // Create a time client service
-    println!("2. Creating authenticated Time Client service...");
-    let mut client_service = TspTimeService::new();
-    client_service.as_authenticated_client("client.example.com".to_string());
+    // Use the SAME instance for both authority and client
+    // This ensures we're using the same service with its configured authority
+    println!("2. Configuring service as authenticated client...");
+    authority_service.as_authenticated_client("client.example.com".to_string());
     println!("   - Client ID: client.example.com");
-    println!("   - Client created successfully");
+    println!("   - Client configured successfully");
+    println!();
 
     // Add the authority's public key to the client
     println!("3. Adding authority's public key to client's trust store...");
-    client_service
-        .add_authority_key("time.authority.example.com".to_string(), &authority_pubkey)?;
+    authority_service.add_authority_key(auth_id.clone(), &authority_pubkey)?;
     println!("   - Authority key added successfully");
     println!();
 
-    // Request a timestamp from the authority
+    // Request a timestamp from the authority (using the same service instance)
     println!("4. Requesting an authentic timestamp from the authority...");
-    let timestamp = client_service
-        .request_timestamp("time.authority.example.com")
-        .await?;
+    let timestamp = authority_service.request_timestamp(&auth_id).await?;
     println!("   - Timestamp received: {}", timestamp.timestamp);
     println!("   - Nonce: {}", timestamp.nonce);
     println!();
 
     // Verify the timestamp
     println!("5. Verifying the timestamp with client's trust store...");
-    let is_valid = client_service.verify_timestamp(&timestamp)?;
+    let is_valid = authority_service.verify_timestamp(&timestamp)?;
     if is_valid {
         println!("   - Timestamp VERIFIED successfully! ✅");
     } else {
@@ -57,15 +59,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!();
 
-    // Create a third-party verifier to demonstrate portable verification
+    // Create a third-party verifier (new instance)
     println!("6. Creating a third-party verifier service...");
     let mut verifier_service = TspTimeService::new();
     println!("   - Verifier service created");
 
     // Add the authority's public key to the verifier
     println!("7. Adding authority's public key to verifier's trust store...");
-    verifier_service
-        .add_authority_key("time.authority.example.com".to_string(), &authority_pubkey)?;
+    verifier_service.add_authority_key(auth_id.clone(), &authority_pubkey)?;
     println!("   - Authority key added to verifier");
     println!();
 
@@ -102,7 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tampered_timestamp = timestamp.clone();
     tampered_timestamp.authority_id = "fake.authority.example.com".to_string();
 
-    let is_valid = client_service.verify_timestamp(&tampered_timestamp);
+    let is_valid = verifier_service.verify_timestamp(&tampered_timestamp);
     match is_valid {
         Ok(true) => println!("   - SECURITY ISSUE: Tampered timestamp verified! ❌"),
         Ok(false) => println!("   - Tampered timestamp correctly rejected! ✅"),

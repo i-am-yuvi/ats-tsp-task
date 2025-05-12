@@ -9,7 +9,7 @@ use crate::client::TimeClient;
 use crate::error::TimeServiceError;
 use crate::models::{AuthenticTimestamp, TimestampStatus};
 
-/// Trait for TSP communication (would be implemented by actual TSP client)
+/// trait for TSP communication - would be implemented by actual TSP client
 #[async_trait]
 pub trait TspCommunication: Send + Sync {
     /// Send a request to a remote endpoint and get a response
@@ -24,13 +24,13 @@ pub trait TspCommunication: Send + Sync {
         R: for<'de> serde::Deserialize<'de> + Send;
 }
 
-/// Example time service implementation that builds on top of the Trust Spanning Protocol
+/// an example time service implementation that builds on top of the tsp
 pub struct TspTimeService {
     // Reference to the underlying TSP implementation (would be provided in real implementation)
     // tsp_client: Box<dyn TspCommunication>,
 
     // Our time authority implementation
-    authority: Option<Box<dyn TimeAuthority>>,
+    authority: Option<TimeAuthorityImpl>,
 
     // Our time client implementation
     client: TimeClient,
@@ -50,17 +50,18 @@ impl TspTimeService {
         }
     }
 
-    // Configure this service as a time authority
+    // configure this service as a time authority
     pub fn as_authority(&mut self, id: String) {
-        self.authority = Some(Box::new(TimeAuthorityImpl::new(id)));
+        println!("DEBUG: Setting up authority with ID: {}", id);
+        self.authority = Some(TimeAuthorityImpl::new(id));
     }
 
-    // Configure this service as an authenticated client
+    // configure this service as an authenticated client
     pub fn as_authenticated_client(&mut self, id: String) {
         self.client = TimeClient::new_authenticated(id);
     }
 
-    // Add an authority's public key for verification
+    // add an authority's public key for verification
     pub fn add_authority_key(
         &mut self,
         authority_id: String,
@@ -69,7 +70,7 @@ impl TspTimeService {
         self.client.add_authority(authority_id, public_key)
     }
 
-    // Add an authority endpoint mapping
+    // add an authority endpoint mapping
     pub fn add_authority_endpoint(&mut self, authority_id: String, endpoint: String) {
         self.authority_endpoints.insert(authority_id, endpoint);
     }
@@ -79,16 +80,21 @@ impl TspTimeService {
         self.authority.as_ref().map(|auth| auth.get_public_key())
     }
 
-    // Get the client's public key (if configured as an authenticated client)
+    // get the client's public key (if configured as an authenticated client)
     pub fn get_client_public_key(&self) -> Option<Vec<u8>> {
         self.client.get_public_key()
     }
 
-    // Request a timestamp from a remote authority
+    // request a timestamp from a remote authority
     pub async fn request_timestamp(
         &self,
         authority_id: &str,
     ) -> Result<AuthenticTimestamp, TimeServiceError> {
+        println!(
+            "DEBUG: Requesting timestamp from authority: {}",
+            authority_id
+        );
+
         let request = self.client.create_request();
 
         // In a real implementation, we would look up the authority endpoint
@@ -107,28 +113,44 @@ impl TspTimeService {
         }
         */
 
-        // For demonstration purposes, we'll simulate the request locally if we have an authority
+        // for demonstration purposes, we'll simulate the request locally if we have an authority
         if let Some(authority) = &self.authority {
-            if authority.get_id() == authority_id {
+            // Check if this is a request for our local authority
+            let auth_id = authority.get_id();
+            println!("DEBUG: Local authority ID: {}", auth_id);
+            println!("DEBUG: Requested authority ID: {}", authority_id);
+
+            if auth_id == authority_id {
+                println!("DEBUG: IDs match, issuing timestamp");
                 let response = authority.issue_timestamp(request).await?;
 
                 if response.status == TimestampStatus::Success {
+                    println!("DEBUG: Timestamp issued successfully");
                     return Ok(response.timestamp);
                 } else {
+                    println!("DEBUG: Request rejected: {:?}", response.status);
                     return Err(TimeServiceError::RequestRejected(format!(
                         "{:?}",
                         response.status
                     )));
                 }
+            } else {
+                println!(
+                    "DEBUG: Authority IDs don't match! '{}' != '{}'",
+                    auth_id, authority_id
+                );
             }
+        } else {
+            println!("DEBUG: No local authority configured");
         }
 
+        println!("DEBUG: Authority not found: {}", authority_id);
         Err(TimeServiceError::AuthorityNotFound(
             authority_id.to_string(),
         ))
     }
 
-    // Verify a timestamp received from an authority
+    // verify a timestamp received from an authority
     pub fn verify_timestamp(
         &self,
         timestamp: &AuthenticTimestamp,
@@ -136,7 +158,7 @@ impl TspTimeService {
         self.client.verify_timestamp(timestamp)
     }
 
-    // Process a timestamp request (when acting as an authority)
+    // process a timestamp request (when acting as an authority)
     pub async fn process_timestamp_request(
         &self,
         request: crate::models::TimestampRequest,
@@ -158,16 +180,16 @@ mod tests {
         let mut service = TspTimeService::new();
         service.as_authority("test.authority".to_string());
 
-        // Request a timestamp from our local authority
+        // request a timestamp from our local authority
         let timestamp = service.request_timestamp("test.authority").await.unwrap();
 
-        // Add the authority's public key to our client
+        // add the authority's public key to our client
         let auth_pubkey = service.get_authority_public_key().unwrap();
         service
             .add_authority_key("test.authority".to_string(), &auth_pubkey)
             .unwrap();
 
-        // Verify the timestamp
+        // verify the timestamp
         let is_valid = service.verify_timestamp(&timestamp).unwrap();
         assert!(is_valid);
     }

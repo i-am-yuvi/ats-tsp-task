@@ -3,29 +3,29 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-/// Represents a signed timestamp from a time authority
+/// represents a signed timestamp from a time authority
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthenticTimestamp {
-    /// The time as reported by the authority
+    /// time as reported by the authority
     pub timestamp: DateTime<Utc>,
 
-    /// Unique identifier for this timestamp
+    /// unique identifier for this timestamp
     pub nonce: String,
 
-    /// Authority that issued this timestamp
+    /// authority that issued this timestamp
     pub authority_id: String,
 
-    /// Digital signature of the timestamp + nonce by the authority
+    /// digital signature of the timestamp + nonce by the authority
     pub signature: Vec<u8>,
 }
 
 /// Represents a request for an authentic timestamp
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TimestampRequest {
-    /// Client-generated unique identifier for this request
+    /// client-generated unique identifier for this request
     pub nonce: String,
 
-    /// Optional client signature to authenticate the request
+    /// optional client signature to authenticate the request
     pub client_signature: Option<Vec<u8>>,
 
     /// Optional client public key or identifier

@@ -11,45 +11,45 @@ use std::time::{Duration, SystemTime};
 use crate::error::TimeServiceError;
 use crate::models::{AuthenticTimestamp, TimestampRequest, TimestampResponse, TimestampStatus};
 
-/// Interface for a time authority
+/// Interface for time authority
 #[async_trait]
 pub trait TimeAuthority: Send + Sync {
-    /// Get the identifier of this authority
+    /// get the identifier
     fn get_id(&self) -> String;
 
-    /// Issue a signed timestamp in response to a request
+    /// issue a signed timestamp in response to a request
     async fn issue_timestamp(
         &self,
         request: TimestampRequest,
     ) -> Result<TimestampResponse, TimeServiceError>;
 
-    /// Verify a timestamp that was allegedly issued by this authority
+    /// verify a timestamp that was allegedly issued by this authority
     fn verify_timestamp(&self, timestamp: &AuthenticTimestamp) -> bool;
 
-    /// Get the public key of this authority (for verification by clients)
+    /// get the public key of this authority - for verification by clients
     fn get_public_key(&self) -> Vec<u8>;
 }
 
 /// Implementation of a time authority
 pub struct TimeAuthorityImpl {
-    /// Unique identifier for this authority
+    /// unique identifier for this authority
     id: String,
 
-    /// Keypair used for signing timestamps
+    /// keypair used for signing timestamps
     keypair: Keypair,
 
-    /// Cache of recently issued timestamps to prevent replay
+    /// cache of recently issued timestamps to prevent replay
     recent_requests: Arc<Mutex<HashMap<String, SystemTime>>>,
 
-    /// Time after which a nonce expires from the cache
+    /// time after which a nonce expires from the cache
     nonce_expiry: Duration,
 
-    /// Optional list of trusted client IDs
+    /// optional list of trusted client IDs
     trusted_clients: Option<HashMap<String, PublicKey>>,
 }
 
 impl TimeAuthorityImpl {
-    /// Create a new time authority with the given identifier
+    /// create a new time authority with the given identifier
     pub fn new(id: String) -> Self {
         let mut csprng = OsRng {};
         let keypair = Keypair::generate(&mut csprng);
@@ -58,12 +58,12 @@ impl TimeAuthorityImpl {
             id,
             keypair,
             recent_requests: Arc::new(Mutex::new(HashMap::new())),
-            nonce_expiry: Duration::from_secs(300), // 5 minutes
+            nonce_expiry: Duration::from_secs(300), // 5 minutes for example
             trusted_clients: None,
         }
     }
 
-    /// Create a new time authority with an existing keypair
+    /// create a new time authority with an existing keypair
     pub fn with_keypair(id: String, keypair: Keypair) -> Self {
         Self {
             id,
@@ -79,7 +79,7 @@ impl TimeAuthorityImpl {
         self.nonce_expiry = expiry;
     }
 
-    /// Add a trusted client to this authority
+    /// add trusted client to this authority
     pub fn add_trusted_client(&mut self, client_id: String, client_pubkey: PublicKey) {
         if self.trusted_clients.is_none() {
             self.trusted_clients = Some(HashMap::new());
@@ -90,7 +90,7 @@ impl TimeAuthorityImpl {
         }
     }
 
-    /// Clean expired nonces from the cache
+    /// clean expired nonces from the cache
     fn clean_expired_nonces(&self) {
         let now = SystemTime::now();
         let mut cache = self.recent_requests.lock().unwrap();
@@ -102,7 +102,7 @@ impl TimeAuthorityImpl {
         });
     }
 
-    /// Check if client is authorized (if authorization is enabled)
+    /// Check if client is authorized - if authorization is enabled
     fn is_client_authorized(&self, request: &TimestampRequest) -> bool {
         // If we have no trusted clients list, we accept all clients
         if self.trusted_clients.is_none() {
